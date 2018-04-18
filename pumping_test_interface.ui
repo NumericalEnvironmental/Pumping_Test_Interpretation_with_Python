@@ -400,6 +400,18 @@
                 </widget>
                </item>
                <item>
+                <widget class="QCheckBox" name="checkShortStor">
+                 <property name="font">
+                  <font>
+                   <pointsize>14</pointsize>
+                  </font>
+                 </property>
+                 <property name="text">
+                  <string>Leaky (Hantush, 1960; short-term; aquitard storage)</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
                 <widget class="QCheckBox" name="checkTheisUnconf">
                  <property name="font">
                   <font>

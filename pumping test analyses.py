@@ -116,6 +116,31 @@ class Hantush:            # Hantush and Jacob (1955) solution
         return s
 
         
+class ShortStorage:            # Hantush (1960) solution for leaky aquifer with aquitard storage (short-term)
+
+    def __init__(self, aquifer, well):
+        self.beta = sqrt(aquifer.Kc*aquifer.Ssc/(aquifer.K*aquifer.Ss)) * 4.0*well.r/aquifer.b
+        self.aquifer = aquifer
+        self.well = well
+
+    def Integrand(self, y, u):
+        # integral term for the Hantush well function
+        x = erfc(self.beta*sqrt(u)/sqrt(y*(y-u))) * exp(-y)/y
+        return x
+
+    def H(self, u):
+        # Hantush modified well function
+        x = quad(self.Integrand, u, +inf, args=(u))[0]
+        return x
+        
+    def Drawdown(self):
+        s = zeros(len(self.well.tArray), float)
+        for i, t in enumerate(self.well.tArray):        
+            u = self.well.r**2*self.aquifer.Ss/(4*self.aquifer.K*t)
+            s[i] = -self.well.Q/(4*pi*self.aquifer.K*self.aquifer.b) * self.H(u)
+        return s        
+
+        
 class Theis:    # Theis (1935) solution
 
     def __init__(self, aquifer, well):
@@ -193,7 +218,7 @@ class MOL:  # numerical (method-of-lines) solution for an unconfined aquifer
 
 class GUI(QtWidgets.QMainWindow, Ui_MainWindow):
     
-    def __init__(self, aquifer, well, tests, data):
+    def __init__(self, aquifer, well, data):
         
         # initiate GUI
         QtWidgets.QMainWindow.__init__(self)
@@ -213,7 +238,7 @@ class GUI(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # button functionality
         self.pushUpdate.clicked.connect(partial(self.Update, aquifer, well))
-        self.pushEval.clicked.connect(partial(self.Evaluate, aquifer, well, tests, data))       
+        self.pushEval.clicked.connect(partial(self.Evaluate, aquifer, well, data))        
         self.pushSave.clicked.connect(partial(self.SaveFiles, aquifer, well))
         self.pushExit.clicked.connect(self.close)
        
@@ -235,12 +260,13 @@ class GUI(QtWidgets.QMainWindow, Ui_MainWindow):
         aquifer.WriteValues()
         well.WriteValues()
     
-    def Evaluate(self, aquifer, well, tests, data):
-    
-        # unpack test objects
-        theis = tests[0]
-        hantush = tests[1]
-        numericWaterTable = tests[2]    
+    def Evaluate(self, aquifer, well, data):    
+        
+        # set up test objects using current parameter values
+        theis = Theis(aquifer, well)
+        hantush = Hantush(aquifer, well)
+        shortStor = ShortStorage(aquifer, well)    
+        numericWaterTable = MOL(aquifer, well)        
         
         # plot transducer data  
         plt.scatter(data.t, data.s, s=10, facecolors='none', edgecolors='black', label = 'Data') 
@@ -253,8 +279,11 @@ class GUI(QtWidgets.QMainWindow, Ui_MainWindow):
             sMOLt = numericWaterTable.Drawdown(1)
             plt.plot(well.tArray, sMOLt, color = 'magenta', label = 'Confined (wellbore storage)')             
         if self.checkHantush.checkState():
-            sHantushS = hantush.Drawdown()
-            plt.plot(well.tArray, sHantushS, color = 'green', label = 'Leaky (Hantush & Jacob)')              
+            sHantush = hantush.Drawdown()
+            plt.plot(well.tArray, sHantush, color = 'green', label = 'Leaky (Hantush & Jacob)')
+        if self.checkShortStor.checkState():
+            sShortStor = shortStor.Drawdown()
+            plt.plot(well.tArray, sShortStor, color = 'olive', label = 'Leaky (Hantush, 1960)')
         if self.checkTheisUnconf.checkState():
             sTheisU = theis.Drawdown(1)
             plt.plot(well.tArray, sTheisU, color = 'blue', label = 'Unconfined (Theis, with Sy)')            
@@ -279,16 +308,10 @@ def PumpTest():
     well = Well(data.t.min(), data.t.max())
     aquifer = Aquifer()
 
-    # set up test method objects
-    theis = Theis(aquifer, well)
-    hantush = Hantush(aquifer, well)
-    numericWaterTable = MOL(aquifer, well)
-    tests = [theis, hantush, numericWaterTable]
-    
     # set up GUI
     app = QtCore.QCoreApplication.instance()
     if app is None: app = QtWidgets.QApplication(sys.argv)
-    window = GUI(aquifer, well, tests, data)
+    window = GUI(aquifer, well, data)
     window.show()
     sys.exit(app.exec_())
     
